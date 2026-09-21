@@ -1,17 +1,59 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { books, genres, getFeaturedBooks } from "@/data/books";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, ArrowRight } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Star, ArrowRight, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { getBooks } from "@/lib/api";
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  genre: string;
+  description: string;
+  coverUrl: string;
+  pageCount: number;
+  publishedYear: number;
+  rating: number;
+  featured?: boolean;
+}
+
+const genres = [
+  "All",
+  "Fiction",
+  "Non-Fiction",
+  "Science Fiction",
+  "Mystery",
+  "Romance",
+  "Fantasy",
+  "Biography",
+  "Self-Help",
+];
 
 export default function HomePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const searchQuery = searchParams.get("search") || "";
   const [selectedGenre, setSelectedGenre] = useState("All");
+  const [books, setBooks] = useState<Book[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const featured = getFeaturedBooks();
+  useEffect(() => {
+    const fetchBooks = async () => {
+      try {
+        const data = await getBooks();
+        setBooks(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load books');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchBooks();
+  }, []);
+
+  const featured = useMemo(() => books.filter((b) => b.featured), [books]);
 
   const filteredBooks = useMemo(() => {
     let result = selectedGenre === "All" ? books : books.filter((b) => b.genre === selectedGenre);
@@ -26,6 +68,25 @@ export default function HomePage() {
     }
     return result;
   }, [selectedGenre, searchQuery]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error: {error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

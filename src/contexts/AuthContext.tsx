@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { login as apiLogin, logout as apiLogout, verifyToken, setAuthToken, getAuthToken } from "@/lib/api";
 
 interface User {
   email: string;
@@ -8,32 +9,54 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => boolean;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const MOCK_USERS: Record<string, { password: string; name: string; isAdmin: boolean }> = {
-  "admin@example.com": { password: "admin123", name: "Admin User", isAdmin: true },
-  "user@example.com": { password: "user123", name: "John Reader", isAdmin: false },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = (email: string, password: string): boolean => {
-    const mockUser = MOCK_USERS[email];
-    if (mockUser && mockUser.password === password) {
-      setUser({ email, name: mockUser.name, isAdmin: mockUser.isAdmin });
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = getAuthToken();
+      if (token) {
+        try {
+          const { user } = await verifyToken();
+          setUser(user);
+        } catch {
+          setAuthToken(null);
+        }
+      }
+      setIsLoading(false);
+    };
+    initAuth();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const { user } = await apiLogin(email, password);
+      setUser(user);
       return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
     }
-    return false;
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    try {
+      await apiLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    setUser(null);
+  };
 
   return (
     <AuthContext.Provider
@@ -43,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isAuthenticated: !!user,
         isAdmin: user?.isAdmin ?? false,
+        isLoading,
       }}
     >
       {children}

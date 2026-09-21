@@ -1,15 +1,59 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { getBookById, books } from "@/data/books";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, BookOpen, ArrowLeft, Clock } from "lucide-react";
+import { Star, BookOpen, ArrowLeft, Clock, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getBook, getBooks } from "@/lib/api";
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  genre: string;
+  description: string;
+  coverUrl: string;
+  pageCount: number;
+  publishedYear: number;
+  rating: number;
+  featured?: boolean;
+}
 
 export default function BookDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const book = getBookById(id || "");
+  const [book, setBook] = useState<Book | null>(null);
+  const [related, setRelated] = useState<Book[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBook = async () => {
+      try {
+        const bookData = await getBook(id || "");
+        setBook(bookData);
+
+        const allBooks = await getBooks();
+        const relatedBooks = allBooks
+          .filter((b: Book) => b.genre === bookData.genre && b.id !== bookData.id)
+          .slice(0, 4);
+        setRelated(relatedBooks);
+      } catch (error) {
+        console.error('Failed to fetch book:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchBook();
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   if (!book) {
     return (
@@ -19,10 +63,6 @@ export default function BookDetailPage() {
       </div>
     );
   }
-
-  const related = books
-    .filter((b) => b.genre === book.genre && b.id !== book.id)
-    .slice(0, 4);
 
   const handleReadNow = () => {
     if (!isAuthenticated) {

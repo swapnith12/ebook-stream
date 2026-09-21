@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const redirect = searchParams.get("redirect") || "/";
 
@@ -25,15 +26,22 @@ export default function LoginPage() {
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const success = login(email, password);
-    if (success) {
-      toast({ title: "Welcome back!", description: "You're now signed in." });
-      navigate(redirect);
-    } else {
-      setError("Invalid email or password.");
+    setIsLoading(true);
+    try {
+      const success = await login(email, password);
+      if (success) {
+        toast({ title: "Welcome back!", description: "You're now signed in." });
+        navigate(redirect);
+      } else {
+        setError("Invalid email or password.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -77,8 +85,8 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full">
-              Sign In
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 
