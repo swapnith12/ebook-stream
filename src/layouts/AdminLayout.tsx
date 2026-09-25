@@ -24,14 +24,17 @@ const adminLinks = [
 ];
 
 export default function AdminLayout() {
-  const { isAdmin, logout, user } = useAuth();
+  const { isAdmin, isAuthenticated, isLoading, logout, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isAdmin) navigate("/login");
-  }, [isAdmin, navigate]);
+    if (isLoading) return;
+    // Not signed in -> login; signed in but not admin -> home
+    if (!isAuthenticated) navigate("/login?redirect=/admin", { replace: true });
+    else if (!isAdmin) navigate("/", { replace: true });
+  }, [isLoading, isAuthenticated, isAdmin, navigate]);
 
-  if (!isAdmin) return null;
+  if (isLoading || !isAdmin) return null;
 
   return (
     <SidebarProvider>
@@ -66,7 +69,7 @@ export default function AdminLayout() {
             </SidebarGroup>
           </SidebarContent>
           <div className="mt-auto p-4 border-t border-sidebar-border">
-            <p className="text-xs text-sidebar-foreground/60 mb-2">{user?.email}</p>
+            <p className="text-xs text-sidebar-foreground/60 mb-2 truncate">{user?.email || user?.name}</p>
             <div className="flex gap-2">
               <Button
                 variant="ghost"

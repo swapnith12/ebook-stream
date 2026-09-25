@@ -1,18 +1,26 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { login as apiLogin, logout as apiLogout, verifyToken, setAuthToken, getAuthToken } from "@/lib/api";
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  getMe,
+  googleLoginUrl,
+  AuthUser,
+} from "@/lib/api";
 
-interface User {
-  email: string;
-  name: string;
-  isAdmin: boolean;
-}
+export type User = AuthUser;
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  /** Dummy email/password login. Throws ApiError with a message on failure. */
+  login: (email: string, password: string) => Promise<User>;
+  /** Redirects the browser to the Google OAuth flow. */
+  loginWithGoogle: () => void;
   logout: () => Promise<void>;
+  /** Re-read the session from the server. */
+  refresh: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /** True while the initial /auth/me check is in flight. */
   isLoading: boolean;
 }
 
@@ -22,38 +30,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      const token = getAuthToken();
-      if (token) {
-        try {
-          const { user } = await verifyToken();
-          setUser(user);
-        } catch {
-          setAuthToken(null);
-        }
-      }
-      setIsLoading(false);
-    };
-    initAuth();
+  const refresh = useCallback(async () => {
+    try {
+      const { user } = await getMe();
+      setUser(user);
+    } catch {
+      setUser(null);
+    }
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const { user } = await apiLogin(email, password);
-      setUser(user);
-      return true;
-    } catch (error) {
-      console.error('Login failed:', error);
-      return false;
-    }
+  useEffect(() => {
+    refresh().finally(() => setIsLoading(false));
+  }, [refresh]);
+
+  const login = async (email: string, password: string): Promise<User> => {
+    const { user } = await apiLogin(email, password);
+    setUser(user);
+    return user;
+  };
+
+  const loginWithGoogle = () => {
+    window.location.assign(googleLoginUrl);
   };
 
   const logout = async () => {
     try {
       await apiLogout();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
     setUser(null);
   };
@@ -63,7 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         login,
+        loginWithGoogle,
         logout,
+        refresh,
         isAuthenticated: !!user,
         isAdmin: user?.isAdmin ?? false,
         isLoading,

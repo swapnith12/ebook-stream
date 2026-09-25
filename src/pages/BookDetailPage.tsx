@@ -2,22 +2,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, BookOpen, ArrowLeft, Clock, Loader2 } from "lucide-react";
+import { BookOpen, ArrowLeft, Clock, Loader2, CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getBook, getBooks } from "@/lib/api";
-
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  genre: string;
-  description: string;
-  coverUrl: string;
-  pageCount: number;
-  publishedYear: number;
-  rating: number;
-  featured?: boolean;
-}
+import { Book, PLACEHOLDER_COVER, UNCATEGORIZED } from "@/lib/books";
 
 export default function BookDetailPage() {
   const { id } = useParams();
@@ -28,23 +16,36 @@ export default function BookDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchBook = async () => {
+      setIsLoading(true);
+      setBook(null);
+      setRelated([]);
       try {
         const bookData = await getBook(id || "");
+        if (cancelled) return;
         setBook(bookData);
 
-        const allBooks = await getBooks();
-        const relatedBooks = allBooks
-          .filter((b: Book) => b.genre === bookData.genre && b.id !== bookData.id)
-          .slice(0, 4);
-        setRelated(relatedBooks);
+        try {
+          const allBooks = await getBooks();
+          if (cancelled) return;
+          const sameGenre = bookData.genre !== UNCATEGORIZED
+            ? allBooks.filter((b) => b.genre === bookData.genre && b.id !== bookData.id)
+            : allBooks.filter((b) => b.id !== bookData.id);
+          setRelated(sameGenre.slice(0, 4));
+        } catch (err) {
+          console.error("Failed to fetch related books:", err);
+        }
       } catch (error) {
-        console.error('Failed to fetch book:', error);
+        console.error("Failed to fetch book:", error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     fetchBook();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (isLoading) {
@@ -72,6 +73,8 @@ export default function BookDetailPage() {
     }
   };
 
+  const added = new Date(book.createdAt);
+
   return (
     <div className="container py-8">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-6 gap-1.5">
@@ -80,7 +83,12 @@ export default function BookDetailPage() {
 
       <div className="grid md:grid-cols-[300px_1fr] gap-10">
         <div className="aspect-[2/3] overflow-hidden rounded-xl shadow-xl bg-muted">
-          <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+          <img
+            src={book.coverUrl}
+            alt={book.title}
+            className="w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.src = PLACEHOLDER_COVER; }}
+          />
         </div>
 
         <div className="flex flex-col justify-between">
@@ -89,22 +97,30 @@ export default function BookDetailPage() {
             <h1 className="text-3xl md:text-4xl font-bold mb-2">{book.title}</h1>
             <p className="text-lg text-muted-foreground mb-4">by {book.author}</p>
 
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex items-center gap-1">
-                <Star className="h-5 w-5 fill-primary text-primary" />
-                <span className="font-semibold text-lg">{book.rating}</span>
-              </div>
+            <div className="flex flex-wrap items-center gap-4 mb-6">
               <div className="flex items-center gap-1 text-muted-foreground">
                 <BookOpen className="h-4 w-4" />
                 <span className="text-sm">{book.pageCount} pages</span>
               </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span className="text-sm">{book.publishedYear}</span>
-              </div>
+              {book.publishedYear && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-sm">{book.publishedYear}</span>
+                </div>
+              )}
+              {!Number.isNaN(added.getTime()) && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" />
+                  <span className="text-sm">Added {added.toLocaleDateString()}</span>
+                </div>
+              )}
             </div>
 
-            <p className="text-foreground/80 leading-relaxed max-w-prose">{book.description}</p>
+            {book.description ? (
+              <p className="text-foreground/80 leading-relaxed max-w-prose">{book.description}</p>
+            ) : (
+              <p className="text-muted-foreground italic">No description available.</p>
+            )}
           </div>
 
           <div className="mt-8">
@@ -122,12 +138,20 @@ export default function BookDetailPage() {
       {/* Related */}
       {related.length > 0 && (
         <section className="mt-16">
-          <h2 className="text-2xl font-bold mb-6">More in {book.genre}</h2>
+          <h2 className="text-2xl font-bold mb-6">
+            {book.genre !== UNCATEGORIZED ? `More in ${book.genre}` : "More books"}
+          </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {related.map((b) => (
               <div key={b.id} onClick={() => navigate(`/book/${b.id}`)} className="group cursor-pointer">
                 <div className="aspect-[2/3] overflow-hidden rounded-lg shadow-md mb-3 bg-muted">
-                  <img src={b.coverUrl} alt={b.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                  <img
+                    src={b.coverUrl}
+                    alt={b.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    loading="lazy"
+                    onError={(e) => { e.currentTarget.src = PLACEHOLDER_COVER; }}
+                  />
                 </div>
                 <h3 className="font-medium text-sm group-hover:text-primary transition-colors line-clamp-2">{b.title}</h3>
                 <p className="text-xs text-muted-foreground">{b.author}</p>
